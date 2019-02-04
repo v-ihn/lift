@@ -6,6 +6,7 @@ class NetworkDesc3:
     def __init__(self):
         self.model_file = 'models/desc3/desc3'
 
+        self.is_training = tf.placeholder(tf.bool, name='desc_triplet_is_training')
         self.input1 = tf.placeholder(tf.float32, [None, 64, 64, 1], name='desc_triplet_input1')
         self.input2 = tf.placeholder(tf.float32, [None, 64, 64, 1], name='desc_triplet_input2')
         self.input3 = tf.placeholder(tf.float32, [None, 64, 64, 1], name='desc_triplet_input3')
@@ -39,25 +40,34 @@ class NetworkDesc3:
 
     def init_optimizer(self, learning_rate=0.001):
         with tf.variable_scope("desc_triplet_optimizer"):
-            return tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                return tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
 
     def single_network(self, input):
         with tf.variable_scope('desc_triplet_cnn_layer1'):
-            conv1 = tf.layers.conv2d(inputs=input, filters=32, kernel_size=7, padding='valid', activation=tf.nn.tanh)
-            pool1 = tf.layers.average_pooling2d(inputs=conv1, pool_size=2, strides=2)
+            conv1 = tf.layers.conv2d(inputs=input, filters=32, kernel_size=7, padding='valid')
+            conv1_normalized = tf.layers.batch_normalization(conv1, training=self.is_training, trainable=False)
+            conv1_activ = tf.nn.relu(conv1_normalized)
+            pool1 = tf.layers.average_pooling2d(inputs=conv1_activ, pool_size=2, strides=2)
 
         with tf.variable_scope('desc_triplet_cnn_layer2'):
-            conv2 = tf.layers.conv2d(inputs=pool1, filters=64, kernel_size=6, padding='valid', activation=tf.nn.tanh)
-            pool2 = tf.layers.average_pooling2d(inputs=conv2, pool_size=3, strides=3)
+            conv2 = tf.layers.conv2d(inputs=pool1, filters=64, kernel_size=6, padding='valid')
+            conv2_normalized = tf.layers.batch_normalization(conv2, training=self.is_training, trainable=False)
+            conv2_activ = tf.nn.relu(conv2_normalized)
+            pool2 = tf.layers.average_pooling2d(inputs=conv2_activ, pool_size=3, strides=3)
 
         with tf.variable_scope('desc_triplet_cnn_layer3'):
-            conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=5, padding='valid', activation=tf.nn.tanh)
-            pool3 = tf.layers.average_pooling2d(inputs=conv3, pool_size=4, strides=4)
+            conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=5, padding='valid')
+            conv3_normalized = tf.layers.batch_normalization(conv3, training=self.is_training, trainable=False)
+            conv3_activ = tf.nn.relu(conv3_normalized)
+            pool3 = tf.layers.average_pooling2d(inputs=conv3_activ, pool_size=4, strides=4)
 
         return tf.reshape(pool3, (-1, 128))
 
     def train_model(self, input1, input2, input3):
-        _, train_loss = self.sess.run([self.optimizer, self.loss], feed_dict={self.input1: input1, self.input2: input2, self.input3: input3})
+        _, train_loss = self.sess.run([self.optimizer, self.loss], feed_dict={self.input1: input1, self.input2: input2,
+                                                                              self.input3: input3, self.is_training: True})
         return np.array(train_loss).mean()
 
     def test_model(self, input1):
@@ -65,11 +75,12 @@ class NetworkDesc3:
         return output
 
     def hardmine_train(self, input1, input2, input3, iteration):
-        mining_ratio = min(2 ** int(iteration / 15000), 8)
+        mining_ratio = min(2 ** int(iteration / 15000), 4)
         if mining_ratio == 1:
             return self.train_model(input1, input2, input3)
         else:
-            losses = self.sess.run(self.loss, feed_dict={self.input1: input1, self.input2: input2, self.input3: input3})
+            losses = self.sess.run(self.loss, feed_dict={self.input1: input1, self.input2: input2,
+                                                         self.input3: input3, self.is_training: True})
             train_with = int(losses.size / mining_ratio)
             training_indices = np.argsort(losses)[::-1][:train_with]
             training_input1 = input1[training_indices]

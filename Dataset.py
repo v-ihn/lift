@@ -90,18 +90,18 @@ class Dataset:
     def get_matching_pair(self):
         label = random.choice(list(self.available_patches))
         patches = random.sample(self.available_patches[label], 2)
-        patches = [self.rotate_patch(self.crop_patch_64(patch['patch']), patch['angle']) for patch in patches]
-        # patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in patches]
+        # patches = [self.rotate_patch(self.crop_patch_64(patch['patch']), patch['angle']) for patch in patches]
+        patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in patches]
         return (label, label), (patches[0], patches[1])
 
     def get_non_matching_pair(self):
         labels = random.sample(list(self.available_patches), 2)
         patch1 = random.choice(self.available_patches[labels[0]])
-        patch1 = self.rotate_patch(self.crop_patch_64(patch1['patch']), patch1['angle'])
-        # patch1 = self.crop_patch_64(self.rotate_patch(patch1['patch'], patch1['angle']))
+        # patch1 = self.rotate_patch(self.crop_patch_64(patch1['patch']), patch1['angle'])
+        patch1 = self.crop_patch_64(self.rotate_patch(patch1['patch'], patch1['angle']))
         patch2 = random.choice(self.available_patches[labels[1]])
-        patch2 = self.rotate_patch(self.crop_patch_64(patch2['patch']), patch2['angle'])
-        # patch2 = self.crop_patch_64(self.rotate_patch(patch2['patch'], patch2['angle']))
+        # patch2 = self.rotate_patch(self.crop_patch_64(patch2['patch']), patch2['angle'])
+        patch2 = self.crop_patch_64(self.rotate_patch(patch2['patch'], patch2['angle']))
         return (labels[0], labels[1]), (patch1, patch2)
 
     def get_triplet(self, rotated: bool):
@@ -110,12 +110,12 @@ class Dataset:
         different_patch = random.choice(self.available_patches[labels[1]])
 
         if rotated:
-            matching_patches = [self.rotate_patch(self.crop_patch_64(patch['patch']), patch['angle']) for patch in
-                                matching_patches]
-            different_patch = self.rotate_patch(self.crop_patch_64(different_patch['patch']), different_patch['angle'])
-            # matching_patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in
+            # matching_patches = [self.rotate_patch(self.crop_patch_64(patch['patch']), patch['angle']) for patch in
             #                     matching_patches]
-            # different_patch = self.crop_patch_64(self.rotate_patch(different_patch['patch'], different_patch['angle']))
+            # different_patch = self.rotate_patch(self.crop_patch_64(different_patch['patch']), different_patch['angle'])
+            matching_patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in
+                                matching_patches]
+            different_patch = self.crop_patch_64(self.rotate_patch(different_patch['patch'], different_patch['angle']))
         else:
             matching_patches = [self.crop_patch_64(patch['patch']) for patch in matching_patches]
             different_patch = self.crop_patch_64(different_patch['patch'])
@@ -142,7 +142,7 @@ class Dataset:
     def rotate_patch(self, patch, angle):
         x_center = patch.shape[1] / 2
         y_center = patch.shape[0] / 2
-        m = cv2.getRotationMatrix2D((x_center, y_center), angle, 1)
+        m = cv2.getRotationMatrix2D((x_center, y_center), 360 - angle, 1)
         rotated_patch = cv2.warpAffine(patch, m, (patch.shape[1], patch.shape[0]))
         # rotated_patch = cv2.normalize(rotated_patch.astype('float'), None, -1.0, 1.0, cv2.NORM_MINMAX)
         return np.expand_dims(rotated_patch, axis=2)

@@ -28,8 +28,8 @@ for i in range(0, 100000000):
 
     matching = True if i % 2 == 0 else False
     labels, patches = dataset.get_batch_desc_pairs(128, matching)
-    # train_loss = network_desc_2.train_model(patches[0], patches[1], matching)
-    train_loss = network_desc_2.hardmine_train(patches[0], patches[1], matching, i)
+    train_loss = network_desc_2.train_model(patches[0], patches[1], matching)
+    # train_loss = network_desc_2.hardmine_train(patches[0], patches[1], matching, i)
     if i % 10 in (0, 1):
         print('Iteration {}, Train loss {}'.format(i, train_loss))
     if i % 2000 == 0:

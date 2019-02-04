@@ -19,6 +19,7 @@ class NetworkDesc2:
         self.saver = tf.train.Saver()
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
+        # self.restore_model()
 
     def init_network(self):
         with tf.variable_scope("network_desc_pair") as scope:
@@ -43,31 +44,32 @@ class NetworkDesc2:
             loss = tf.nn.relu(self.margin - pair_dist_1_to_3)
         return loss
 
-    def init_optimizer(self, learning_rate=0.0005):
+    def init_optimizer(self, learning_rate=0.001):
         with tf.variable_scope("desc_pair_optimizer"):
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
-        return optimizer
+                return optimizer
 
     def single_network(self, input):
         with tf.variable_scope('desc_cnn_layer1'):
-            conv1 = tf.layers.conv2d(inputs=input, filters=32, kernel_size=7, padding='valid')
-            conv1_normalized = tf.layers.batch_normalization(conv1, training=self.is_training, trainable=False)
-            conv1_activ = tf.nn.relu(conv1_normalized)
-            pool1 = tf.layers.average_pooling2d(inputs=conv1_activ, pool_size=2, strides=2)
+            input_normalized = tf.layers.batch_normalization(input, training=self.is_training)
+            conv1 = tf.layers.conv2d(inputs=input_normalized, filters=32, kernel_size=7, padding='valid', activation=tf.nn.relu)
+            conv1_normalized = tf.layers.batch_normalization(conv1, training=self.is_training)
+            # conv1_activ = tf.nn.relu(conv1_normalized)
+            pool1 = tf.layers.average_pooling2d(inputs=conv1_normalized, pool_size=2, strides=2)
 
         with tf.variable_scope('desc_cnn_layer2'):
-            conv2 = tf.layers.conv2d(inputs=pool1, filters=64, kernel_size=6, padding='valid')
-            conv2_normalized = tf.layers.batch_normalization(conv2,  training=self.is_training, trainable=False)
-            conv2_activ = tf.nn.relu(conv2_normalized)
-            pool2 = tf.layers.average_pooling2d(inputs=conv2_activ, pool_size=3, strides=3)
+            conv2 = tf.layers.conv2d(inputs=pool1, filters=64, kernel_size=6, padding='valid', activation=tf.nn.relu)
+            conv2_normalized = tf.layers.batch_normalization(conv2, training=self.is_training)
+            # conv2_activ = tf.nn.relu(conv2_normalized)
+            pool2 = tf.layers.average_pooling2d(inputs=conv2_normalized, pool_size=3, strides=3)
 
         with tf.variable_scope('desc_cnn_layer3'):
-            conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=5, padding='valid')
-            conv3_normalized = tf.layers.batch_normalization(conv3,  training=self.is_training, trainable=False)
-            conv3_activ = tf.nn.relu(conv3_normalized)
-            pool3 = tf.layers.average_pooling2d(inputs=conv3_activ, pool_size=4, strides=4)
+            conv3 = tf.layers.conv2d(inputs=pool2, filters=128, kernel_size=5, padding='valid', activation=tf.nn.relu)
+            conv3_normalized = tf.layers.batch_normalization(conv3, training=self.is_training)
+            # conv3_activ = tf.nn.relu(conv3_normalized)
+            pool3 = tf.layers.average_pooling2d(inputs=conv3_normalized, pool_size=4, strides=4)
 
         return tf.reshape(pool3, (-1, 128))
 
@@ -78,7 +80,7 @@ class NetworkDesc2:
         return np.array(train_loss).mean()
 
     def hardmine_train(self, input1, input2, matching_pairs, iteration):
-        mining_ratio = min(2 ** int(iteration / 75000), 4)
+        mining_ratio = min(2 ** int(iteration / 15000), 4)
         if mining_ratio == 1:
             return self.train_model(input1, input2, matching_pairs)
         else:
