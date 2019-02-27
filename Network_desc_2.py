@@ -8,7 +8,7 @@ class NetworkDesc2:
         self.margin = margin
 
         self.is_training = tf.placeholder(tf.bool, name='desc_pair_is_training')
-        self.matching_pairs = tf.placeholder(tf.bool, name='desc_pair_matching')
+        self.matching_pairs = tf.placeholder(tf.bool, [None], name='desc_pair_matching')
         self.input1 = tf.placeholder(tf.float32, [None, 64, 64, 1], name='desc_pair_input1')
         self.input2 = tf.placeholder(tf.float32, [None, 64, 64, 1], name='desc_pair_input2')
 
@@ -19,7 +19,7 @@ class NetworkDesc2:
         self.saver = tf.train.Saver()
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
-        # self.restore_model()
+        self.restore_model()
 
     def init_network(self):
         with tf.variable_scope("network_desc_pair") as scope:
@@ -31,6 +31,7 @@ class NetworkDesc2:
     def init_loss(self):
         with tf.variable_scope("desc_pair_loss"):
             loss = tf.cond(self.matching_pairs, true_fn=self.loss_matching, false_fn=self.loss_non_matching)
+            print(loss.shape)
         return loss
 
     def loss_matching(self):
@@ -44,7 +45,7 @@ class NetworkDesc2:
             loss = tf.nn.relu(self.margin - pair_dist_1_to_3)
         return loss
 
-    def init_optimizer(self, learning_rate=0.001):
+    def init_optimizer(self, learning_rate=0.005):
         with tf.variable_scope("desc_pair_optimizer"):
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
@@ -79,8 +80,12 @@ class NetworkDesc2:
                                                                               self.is_training: True})
         return np.array(train_loss).mean()
 
+    def test_model(self, input1):
+        output = self.sess.run(self.output_1, feed_dict={self.input1: input1, self.is_training: False})
+        return output
+
     def hardmine_train(self, input1, input2, matching_pairs, iteration):
-        mining_ratio = min(2 ** int(iteration / 15000), 4)
+        mining_ratio = min(2 ** int(iteration / 20000), 4)
         if mining_ratio == 1:
             return self.train_model(input1, input2, matching_pairs)
         else:
