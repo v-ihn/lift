@@ -3,77 +3,74 @@ try:
 except ImportError:
     pass
 import numpy as np
+import sys
 
 from Dataset import *
-from Network_desc_2 import *
-from Network_desc_3 import *
-from Network_desc_3_keras import *
+from NetworkDesc import *
 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 folder = 'img'
-kp_file = 'world_points_complete.txt'
+kp_train_file = 'train_keypoints.txt'
+kp_test_file = 'test_keypoints.txt'
 
-dataset1 = Dataset(folder, kp_file)
+dataset = Dataset(folder, kp_train_file)
+dataset.create_fixed_epoch_desc(38400)
 
-# network_desc_2 = NetworkDesc2()
-# network_desc_3 = NetworkDesc3()
+test_dataset = Dataset(folder, kp_test_file, mean=dataset.mean, std=dataset.std)
+test_batch = test_dataset.get_batch_desc_triplets(64, rotated=False)
 
-network_desc_3 = NetworkDesc3Keras()
-
+network_desc = NetworkDesc()
 mining_ratio = 1
 
-for i in range(1, 100000001):
-    labels, patches = dataset1.get_batch_desc_triplets(128)
+for i in range(1, 300001):
+    # patches = dataset.get_batch_desc_triplets(128, rotated=False)
+    patches = dataset.get_batch_desc_triplets_from_fixed_epoch(128)
     # train_loss = network_desc_3.train_model(patches[0], patches[1], patches[2])
-    train_loss = network_desc_3.hardmine_train(patches[0], patches[1], patches[2], mining_ratio)
+    train_loss = network_desc.hardmine_train(patches[0], patches[1], patches[2], mining_ratio)
     if i % 10 == 0:
         print('Iteration {}, Train loss {}'.format(i, train_loss))
     if i % 1000 == 0:
-        network_desc_3.save_weights()
+        network_desc.save_weights()
+    if i % 5000 == 0:
+        print('Test loss: {}'.format(network_desc.test_model(test_batch[0], test_batch[1], test_batch[2])))
     if i % 100000 == 0 and mining_ratio < 4:
         mining_ratio *= 2
 
-    # matching = True if i % 2 == 0 else False
-    # labels, patches = dataset.get_batch_desc_pairs(128, matching)
-    # train_loss = network_desc_2.train_model(patches[0], patches[1], matching)
-    # # train_loss = network_desc_2.hardmine_train(patches[0], patches[1], matching, i)
-    # if i % 10 in (0, 1):
-    #     print('Iteration {}, Train loss {}'.format(i, train_loss))
-    # if i % 2000 == 0:
-    #     network_desc_2.save_model()
-    #
 
-    # labels, patches, matching = dataset.get_batch_desc_pairs2(128)
-    # train_loss = network_desc_2.train_model(patches[0], patches[1], matching)
-    # # train_loss = network_desc_2.hardmine_train(patches[0], patches[1], matching, i)
-    # if i % 10 in (0, 1):
-    #     print('Iteration {}, Train loss {}'.format(i, train_loss))
-    # if i % 2000 == 0:
-    #     network_desc_2.save_model()
+patches = dataset.get_batch_desc_triplets(256, rotated=False)
+loss_test = network_desc.test_model(patches[0], patches[1], patches[2])
+loss_train = network_desc.train_model(patches[0], patches[1], patches[2])
+print('Test: {}, Train: {}'.format(loss_test, loss_train))
+
+triplet = dataset.get_batch_desc_triplets(1, rotated=False)
+d1 = network_desc.get_descriptor(triplet[0])
+d2 = network_desc.get_descriptor(triplet[1])
+d3 = network_desc.get_descriptor(triplet[2])
+
+d_pos = np.sqrt(np.sum(np.square(d1 - d2), axis=1, keepdims=True))
+d_1_3 = np.sqrt(np.sum(np.square(d1 - d3), axis=1, keepdims=True))
+d_2_3 = np.sqrt(np.sum(np.square(d2 - d3), axis=1, keepdims=True))
+d_neg = np.maximum(d_1_3, d_2_3)
+d_neg = 4.0 - d_neg
+
+print(d_pos)
+print(d_neg)
 
 
-# labels, patches = dataset.get_batch_desc_triplets(256)
-# out1 = network_desc_3.test_model([patches[0]])
-# out2 = network_desc_3.test_model([patches[1]])
-# out3 = network_desc_3.test_model([patches[2]])
-# loss = network_desc_3.test_model(patches[0], patches[1], patches[2])
-#
-# d_pos = (np.sum(np.square(out1[0] - out2[0]))) ** 0.5
-# d_neg = (np.sum(np.square(out1[0] - out3[0]))) ** 0.5
-# print(d_pos)
-# print(d_neg)
-# print(loss)
+print('Test loss: {}'.format(network_desc.test_model(test_batch[0], test_batch[1], test_batch[2])))
 
-# labels, patches = dataset.get_matching_pair()
-# out1 = network_desc_2.test_model([patches[0]])
-# out2 = network_desc_2.test_model([patches[1]])
-#
-# distance = (np.sum(np.square(out1[0] - out2[0]))) ** 0.5
-# print(distance)
+triplet = test_dataset.get_batch_desc_triplets(1, rotated=False)
+d1 = network_desc.get_descriptor(triplet[0])
+d2 = network_desc.get_descriptor(triplet[1])
+d3 = network_desc.get_descriptor(triplet[2])
 
-# labels, patches = dataset.get_matching_pair()
-# img = patches[0]
-# print(labels[0])
-# print(img.shape)
-# cv2.imshow('Img', img)
-# cv2.waitKey()
+d_pos = np.sqrt(np.sum(np.square(d1 - d2), axis=1, keepdims=True))
+d_1_3 = np.sqrt(np.sum(np.square(d1 - d3), axis=1, keepdims=True))
+d_2_3 = np.sqrt(np.sum(np.square(d2 - d3), axis=1, keepdims=True))
+d_neg = np.maximum(d_1_3, d_2_3)
+d_neg = 4.0 - d_neg
+
+print(d_pos)
+print(d_neg)

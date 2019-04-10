@@ -29,9 +29,8 @@ class KeyPointInfo:
 
 
 class Dataset:
-    def __init__(self, data_folder: str, kp_file: str, keypoint_size_multiplier=15, img_range=(0.0, 1.0)):
+    def __init__(self, data_folder: str, kp_file: str, keypoint_size_multiplier=15, clamp_crop_size=True, mean=None, std=None):
         available_keypoints = {}
-        unique_labels = []
         unique_filenames = []
 
         kp_file = open(data_folder + '/' + kp_file, 'r')
@@ -42,11 +41,9 @@ class Dataset:
             unique_filenames.append(keypoint.file)
             if point not in available_keypoints:
                 available_keypoints[point] = [keypoint]
-                unique_labels.append(point)
             else:
                 available_keypoints[point].append(keypoint)
 
-        unique_labels = set(unique_labels)
         unique_filenames = set(unique_filenames)
         files = {}
         for filename in unique_filenames:
@@ -55,96 +52,56 @@ class Dataset:
 
         self.available_patches = {}
         for point in available_keypoints:
-            # one_hot_point = self.one_hot_label(unique_labels, point)
             self.available_patches[point] = []
             for keypoint in available_keypoints[point]:
-                patch = self.create_patch_128(files, keypoint, keypoint_size_multiplier, img_range)
+                patch = self.create_patch_128(files, keypoint, keypoint_size_multiplier, clamp_crop_size)
                 if patch is not None:
                     self.available_patches[point].append({'patch': patch, 'angle': keypoint.angle})
 
+        self.mean = None
+        self.std = None
+        self.normalize(mean, std)
+
         self.available_indices = {}
-        self.available_patches_in_epoch = 0
         self.init_patch_indices()
+
+        self.fixed_epoch_desc = None
+        self.fixed_epoch_desc_index = 0
 
     def init_patch_indices(self):
         self.available_indices = {}
-        self.available_patches_in_epoch = 0
         for point in self.available_patches:
             num_keypoints = len(self.available_patches[point])
-            self.available_patches_in_epoch += num_keypoints
             patch_indices = [i for i in range(num_keypoints)]
             self.available_indices[point] = patch_indices
 
-    def get_batch_desc_pairs(self, batch_size: int, matching: bool):
-        patches = []
-        labels = []
-        for i in range(batch_size):
-            if matching:
-                label_pair, patch_pair = self.get_matching_pair()
-            else:
-                label_pair, patch_pair = self.get_non_matching_pair()
-            labels.append(label_pair)
-            patches.append(patch_pair)
-        patches_batch = np.array(list(zip(*patches)))
-        labels_batch = np.array(list(zip(*labels)))
-        return labels_batch, patches_batch
+    def create_fixed_epoch_desc(self, size, rotated=True):
+        self.fixed_epoch_desc = []
+        for _ in range(size):
+            self.fixed_epoch_desc.append(self.get_triplet(rotated))
 
-    def get_batch_desc_pairs2(self, batch_size: int):
-        patches = []
-        labels = []
-        matching = []
-        for i in range(batch_size):
-            if i % batch_size < int(batch_size / 2):
-                label_pair, patch_pair = self.get_matching_pair()
-                matching.append(True)
-            else:
-                label_pair, patch_pair = self.get_non_matching_pair()
-                matching.append(False)
-            labels.append(label_pair)
-            patches.append(patch_pair)
+    def get_batch_desc_triplets_from_fixed_epoch(self, batch_size: int):
+        assert len(self.fixed_epoch_desc) % batch_size == 0
 
-        args = np.array([i for i in range(batch_size)])
-        np.random.shuffle(args)
-        patches = np.array(patches)[args]
-        labels = np.array(labels)[args]
-        matching = np.array(matching)[args]
+        patches_batch = np.array(list(zip(*self.fixed_epoch_desc[self.fixed_epoch_desc_index:self.fixed_epoch_desc_index + batch_size])))
+        self.fixed_epoch_desc_index = (self.fixed_epoch_desc_index + batch_size) % len(self.fixed_epoch_desc)
+        if self.fixed_epoch_desc_index == 0:
+            np.random.shuffle(self.fixed_epoch_desc)
 
-        patches_batch = np.array(list(zip(*patches)))
-        labels_batch = np.array(list(zip(*labels)))
-        return labels_batch, patches_batch, matching
+        return patches_batch
 
     def get_batch_desc_triplets(self, batch_size: int, rotated=True):
-        if self.available_patches_in_epoch < batch_size:
-            self.init_patch_indices()
-
         patches = []
-        labels = []
         for i in range(batch_size):
-            labels_triplet, patches_triplet = self.get_triplet2(rotated)
-            labels.append(labels_triplet)
+            patches_triplet = self.get_triplet2(rotated)
             patches.append(patches_triplet)
         patches_batch = np.array(list(zip(*patches)))
-        labels_batch = np.array(list(zip(*labels)))
-        return labels_batch, patches_batch
-
-    def get_matching_pair(self):
-        label = random.choice(list(self.available_patches))
-        patches = random.sample(self.available_patches[label], 2)
-        patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in patches]
-        return (label, label), (patches[0], patches[1])
-
-    def get_non_matching_pair(self):
-        labels = random.sample(list(self.available_patches), 2)
-        patch1 = random.choice(self.available_patches[labels[0]])
-        patch1 = self.crop_patch_64(self.rotate_patch(patch1['patch'], patch1['angle']))
-        patch2 = random.choice(self.available_patches[labels[1]])
-        patch2 = self.crop_patch_64(self.rotate_patch(patch2['patch'], patch2['angle']))
-        return (labels[0], labels[1]), (patch1, patch2)
+        return patches_batch
 
     def get_triplet(self, rotated: bool):
-        labels = random.sample(list(self.available_patches), 2)
-        matching_patches = random.sample(self.available_patches[labels[0]], 2)
-        different_patch = random.choice(self.available_patches[labels[1]])
+        points = random.sample(list(self.available_patches), 2)
+        matching_patches = random.sample(self.available_patches[points[0]], 2)
+        different_patch = random.choice(self.available_patches[points[1]])
 
         if rotated:
             matching_patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in
@@ -154,26 +111,26 @@ class Dataset:
             matching_patches = [self.crop_patch_64(patch['patch']) for patch in matching_patches]
             different_patch = self.crop_patch_64(different_patch['patch'])
 
-        return (labels[0], labels[0], labels[1]), (matching_patches[0], matching_patches[1], different_patch)
+        return matching_patches[0], matching_patches[1], different_patch
 
     def get_triplet2(self, rotated: bool):
-        labels = random.sample(list(self.available_indices), 2)
-        matching_patches_indices = random.sample(self.available_indices[labels[0]], 2)
-        different_patch_index = random.choice(self.available_indices[labels[1]])
-        self.available_patches_in_epoch -= 3
+        points = random.sample(list(self.available_indices), 2)
+        matching_patches_indices = random.sample(self.available_indices[points[0]], 2)
+        different_patch_index = random.choice(self.available_indices[points[1]])
 
-        self.available_indices[labels[0]] = [index for index in self.available_indices[labels[0]] if index not in matching_patches_indices]
-        if len(self.available_indices[labels[0]]) < 2:
-            self.available_patches_in_epoch -= len(self.available_indices[labels[0]])
-            del self.available_indices[labels[0]]
+        self.available_indices[points[0]] = [index for index in self.available_indices[points[0]] if index not in matching_patches_indices]
+        if len(self.available_indices[points[0]]) < 2:
+            del self.available_indices[points[0]]
 
-        self.available_indices[labels[1]].remove(different_patch_index)
-        if len(self.available_indices[labels[1]]) < 2:
-            self.available_patches_in_epoch -= len(self.available_indices[labels[1]])
-            del self.available_indices[labels[1]]
+        self.available_indices[points[1]].remove(different_patch_index)
+        if len(self.available_indices[points[1]]) < 2:
+            del self.available_indices[points[1]]
 
-        matching_patches = [self.available_patches[labels[0]][index] for index in matching_patches_indices]
-        different_patch = self.available_patches[labels[1]][different_patch_index]
+        if len(self.available_indices) < 2:
+            self.init_patch_indices()
+
+        matching_patches = [self.available_patches[points[0]][index] for index in matching_patches_indices]
+        different_patch = self.available_patches[points[1]][different_patch_index]
 
         if rotated:
             matching_patches = [self.crop_patch_64(self.rotate_patch(patch['patch'], patch['angle'])) for patch in
@@ -183,20 +140,24 @@ class Dataset:
             matching_patches = [self.crop_patch_64(patch['patch']) for patch in matching_patches]
             different_patch = self.crop_patch_64(different_patch['patch'])
 
-        return (labels[0], labels[0], labels[1]), (matching_patches[0], matching_patches[1], different_patch)
+        return [matching_patches[0], matching_patches[1], different_patch]
 
-    def create_patch_128(self, files: dict, kp: KeyPointInfo, keypoint_size_multiplier, img_range):
+    def create_patch_128(self, files: dict, kp: KeyPointInfo, keypoint_size_multiplier, clamp_crop_size):
         img = files[kp.file]
         x_center = int(kp.x + 0.5)
         y_center = int(kp.y + 0.5)
-        crop_size = int(keypoint_size_multiplier * kp.size)
+        if clamp_crop_size:
+            crop_size = int(np.clip(keypoint_size_multiplier * kp.size, keypoint_size_multiplier * 2.0, keypoint_size_multiplier * 3.5))
+            # crop_size = int(keypoint_size_multiplier * 2.75)
+        else:
+            crop_size = int(keypoint_size_multiplier * kp.size)
 
         if x_center - crop_size < 0 or x_center + crop_size >= img.shape[1] or y_center - crop_size < 0 or y_center + crop_size >= img.shape[0]:
             return None
 
         patch = img[y_center - crop_size:y_center + crop_size, x_center - crop_size:x_center + crop_size].copy()
         patch = cv2.resize(patch, (128, 128))
-        patch = cv2.normalize(patch.astype('float'), None, img_range[0], img_range[1], cv2.NORM_MINMAX)
+        # patch = cv2.normalize(patch.astype('float'), None, -1.0, 1.0, cv2.NORM_MINMAX)
         return np.expand_dims(patch, axis=2)
 
     def crop_patch_64(self, patch_128):
@@ -209,5 +170,16 @@ class Dataset:
         rotated_patch = cv2.warpAffine(patch, m, (patch.shape[1], patch.shape[0]))
         return np.expand_dims(rotated_patch, axis=2)
 
-    def one_hot_label(self, unique_labels: set, label: Point3):
-        return tuple([1 if label == l else 0 for l in unique_labels])
+    def normalize(self, mean, std):
+        all_patches = []
+        for point in self.available_patches:
+            for p in self.available_patches[point]:
+                all_patches.append(p['patch'])
+
+        all_patches = np.array(all_patches)
+        self.mean = np.mean(all_patches) if mean is None else mean
+        self.std = np.std(all_patches) if std is None else std
+
+        for point in self.available_patches:
+            for i in range(len(self.available_patches[point])):
+                self.available_patches[point][i]['patch'] = (self.available_patches[point][i]['patch'] - self.mean) / self.std
