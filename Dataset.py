@@ -35,7 +35,7 @@ class Dataset:
 
         kp_file = open(data_folder + '/' + kp_file, 'r')
         for line in kp_file.read().splitlines():
-            line_arr = line.split(" ")
+            line_arr = line.split(',')
             point = Point3(float(line_arr[0]), float(line_arr[1]), float(line_arr[2]))
             keypoint = KeyPointInfo(data_folder + '/' + line_arr[3], float(line_arr[4]), float(line_arr[5]), float(line_arr[6]), float(line_arr[7]))
             unique_filenames.append(keypoint.file)
