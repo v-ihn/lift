@@ -8,7 +8,8 @@ import os
 
 
 def mnist():
-    return K.datasets.mnist.load_data()
+    (train_images, train_labels), (test_images, test_labels) = K.datasets.mnist.load_data()
+    return train_images, train_labels, test_images, test_labels
 
 
 def shapes(shapes_dir):
@@ -94,47 +95,58 @@ def alienator(data_folder, train_filename, test_filename, rotated=True, kp_size_
 
 
 def brown(data_folder):
-    all_labels = []
-    train_images, test_images, train_labels, test_labels = [], [], [], []
+    if os.path.isfile('{}/train_patches.npy'.format(data_folder)) and os.path.isfile('{}/test_patches.npy'.format(data_folder)) and os.path.isfile('{}/train_labels.npy'.format(data_folder)) and os.path.isfile('{}/test_labels.npy'.format(data_folder)):
+        train_images = np.load('{}/train_patches.npy'.format(data_folder))
+        test_images = np.load('{}/test_patches.npy'.format(data_folder))
+        train_labels = np.load('{}/train_labels.npy'.format(data_folder))
+        test_labels = np.load('{}/test_labels.npy'.format(data_folder))
+    else:
+        all_labels = []
+        train_images, test_images, train_labels, test_labels = [], [], [], []
 
-    patches_in_row = 16
-    patches_in_column = 16
-    patch_size = 64
+        patches_in_row = 16
+        patches_in_column = 16
+        patch_size = 64
 
-    data_file = open(data_folder + '/info.txt', 'r')
-    for line in data_file.readlines():
-        all_labels.append(line.split(' ')[0])
-    data_file.close()
+        data_file = open(data_folder + '/info.txt', 'r')
+        for line in data_file.readlines():
+            all_labels.append(line.split(' ')[0])
+        data_file.close()
 
-    unique_labels = list(set(all_labels))
-    # labels_to_test = np.random.choice(unique_labels, int(len(unique_labels) / 20), replace=False)
-    labels_to_test = [unique_labels[i] for i in range(len(unique_labels)) if i % 10 == 0]
+        unique_labels = list(set(all_labels))
+        # labels_to_test = np.random.choice(unique_labels, int(len(unique_labels) / 20), replace=False)
+        labels_to_test = [unique_labels[i] for i in range(len(unique_labels)) if i % 10 == 0]
 
-    img_index = 0
-    label_index = 0
-    while os.path.isfile('{}/patches{:04d}.bmp'.format(data_folder, img_index)):
-        img = cv2.imread('{}/patches{:04d}.bmp'.format(data_folder, img_index), flags=cv2.IMREAD_GRAYSCALE)
+        img_index = 0
+        label_index = 0
+        while os.path.isfile('{}/patches{:04d}.bmp'.format(data_folder, img_index)):
+            img = cv2.imread('{}/patches{:04d}.bmp'.format(data_folder, img_index), flags=cv2.IMREAD_GRAYSCALE)
 
-        for img_patch_index in range(patches_in_row * patches_in_column):
-            if label_index >= len(all_labels):
-                break
+            for img_patch_index in range(patches_in_row * patches_in_column):
+                if label_index >= len(all_labels):
+                    break
 
-            label = all_labels[label_index]
+                label = all_labels[label_index]
 
-            patch_x = (img_patch_index % patches_in_row) * patch_size
-            patch_y = int(img_patch_index / patches_in_column) * patch_size
-            patch = img[patch_y:patch_y + patch_size, patch_x:patch_x + patch_size]
+                patch_x = (img_patch_index % patches_in_row) * patch_size
+                patch_y = int(img_patch_index / patches_in_column) * patch_size
+                patch = img[patch_y:patch_y + patch_size, patch_x:patch_x + patch_size]
 
-            if label in labels_to_test:
-                test_labels.append(label)
-                test_images.append(patch)
-            else:
-                train_labels.append(label)
-                train_images.append(patch)
+                if label in labels_to_test:
+                    test_labels.append(label)
+                    test_images.append(patch)
+                else:
+                    train_labels.append(label)
+                    train_images.append(patch)
 
-            label_index += 1
+                label_index += 1
 
-        img_index += 1
+            img_index += 1
+
+        np.save('{}/train_patches.npy'.format(data_folder), train_images)
+        np.save('{}/test_patches.npy'.format(data_folder), test_images)
+        np.save('{}/train_labels.npy'.format(data_folder), train_labels)
+        np.save('{}/test_labels.npy'.format(data_folder), test_labels)
 
     return train_images, train_labels, test_images, test_labels
 
