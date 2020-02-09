@@ -1,4 +1,4 @@
-from tensorflow.python import keras as K
+from tensorflow import keras as K
 import numpy as np
 import os
 

@@ -4,14 +4,17 @@ except ImportError:
     pass
 import numpy as np
 import sys
-from tensorflow.python import keras as K
+import tensorflow as tf
 
 import datasets
 from Dataset import *
 from NetworkDesc import *
 from NetworkDescPN import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 
 def load_datasets(dataset_name):
@@ -21,6 +24,10 @@ def load_datasets(dataset_name):
         train_images, train_labels, test_images, test_labels = datasets.shapes('img/shapes')
     elif dataset_name == 'alienator':
         train_images, train_labels, test_images, test_labels = datasets.alienator('img', 'train_keypoints.txt', 'test_keypoints.txt', rotated=False)
+    elif dataset_name == 'alienator_custom':
+        train_images, train_labels, test_images, test_labels = datasets.alienator('.', 'train_keypoints_custom.txt', 'test_keypoints_custom.txt', rotated=False, kp_size_multiplier=30)
+    elif dataset_name == 'alienator_custom_ns':
+        train_images, train_labels, test_images, test_labels = datasets.alienator('.', 'train_keypoints_custom_ns.txt', 'test_keypoints_custom_ns.txt', rotated=False, kp_size_multiplier=30)
     elif dataset_name == 'alienator2':
         train_images, train_labels, test_images, test_labels = datasets.alienator('img', 'train_keypoints2.txt', 'test_keypoints2.txt', rotated=False)
     else:
@@ -33,19 +40,17 @@ def load_datasets(dataset_name):
 
 
 if __name__ == '__main__':
-    train_dataset, test_dataset = load_datasets('alienator2')
+    train_dataset, test_dataset = load_datasets('alienator_custom_ns')
 
-    test_batch = test_dataset.get_batch_triplets(1024)
+    test_batch = test_dataset.get_batch_triplets(100)
 
-    desc_file = 'desc_ali2_hinge_relu_avg_batch_adam.h5'
+    desc_file = 'desc_ali_custom_ns2_hinge_relu_avg_batch_adam.h5'
     network_desc = NetworkDesc(learning_rate=0.001, model_file=desc_file)
-    # network_desc = NetworkDescPN(learning_rate=0.01, model_file=desc_file)
     mining_ratio = 1
-    batch_size = 128
+    batch_size = 100
 
-    for i in range(1, 3001):
+    for i in range(1, 6001):
         patches = train_dataset.get_batch_triplets(batch_size)
-        # patches = train_dataset.get_batch_triplets_from_fixed_epoch(batch_size)
 
         train_loss = network_desc.hardmine_train(patches[0], patches[1], patches[2], mining_ratio)
         if i % 10 == 0:
@@ -53,12 +58,7 @@ if __name__ == '__main__':
         if i % 1000 == 0:
             network_desc.save_weights()
             print('Test loss: {}'.format(network_desc.test_model(test_batch[0], test_batch[1], test_batch[2])))
-        # if i == 5000:
-        #     mining_ratio = 8
-        #     batch_size = 1024
-        # if i == 10000 and K.backend.get_value(network_desc.training_model.optimizer.lr) > 0.001:
-        #     K.backend.set_value(network_desc.training_model.optimizer.lr, 0.001)
-        if i % 1000 == 0 and mining_ratio < 4:
+        if i % 2000 == 0 and mining_ratio < 4:
             mining_ratio *= 2
             batch_size *= 2
 

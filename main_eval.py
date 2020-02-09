@@ -4,7 +4,8 @@ except ImportError:
     pass
 import numpy as np
 import sys
-from tensorflow.python import keras as K
+import tensorflow as tf
+from tensorflow import keras as K
 import matplotlib.pyplot as plt
 
 import datasets
@@ -89,20 +90,25 @@ def save_net_results(model_name, dataset_name):
         train_images, train_labels, test_images, test_labels = datasets.shapes('img/shapes')
     elif dataset_name == 'alienator':
         train_images, train_labels, test_images, test_labels = datasets.alienator('img', 'train_keypoints.txt', 'test_keypoints.txt', rotated=False)
+    elif dataset_name == 'alienator_custom':
+        train_images, train_labels, test_images, test_labels = datasets.alienator('.', 'train_keypoints_custom.txt', 'test_keypoints_custom.txt', rotated=False, kp_size_multiplier=30)
+    elif dataset_name == 'alienator_custom_ns':
+        train_images, train_labels, test_images, test_labels = datasets.alienator('.', 'train_keypoints_custom_ns.txt', 'test_keypoints_custom_ns.txt', rotated=False, kp_size_multiplier=30)
     elif dataset_name == 'alienator2':
         train_images, train_labels, test_images, test_labels = datasets.alienator('img', 'train_keypoints2.txt', 'test_keypoints2.txt', rotated=False)
     else:
         train_images, train_labels, test_images, test_labels = datasets.brown(dataset_name)
 
-    train_dataset = Dataset(train_images, train_labels)
-    test_dataset = Dataset(test_images, test_labels, mean=train_dataset.mean, std=train_dataset.std)
+    train_dataset = Dataset(train_images, train_labels, size=64)
+    test_dataset = Dataset(test_images, test_labels, mean=train_dataset.mean, std=train_dataset.std, size=64)
 
     network_desc = NetworkDesc(model_file=model_name + '.h5')
     # network_desc = NetworkDescPN(model_file=model_name + '.h5')
 
-    batch = test_dataset.get_batch_triplets(1000)
+    batch = test_dataset.get_batch_triplets(100000)
 
-    positives_net, negatives_net = get_positives_negatives(get_net_descriptors(network_desc, batch[0]), get_net_descriptors(network_desc, batch[1]),
+    positives_net, negatives_net = get_positives_negatives(get_net_descriptors(network_desc, batch[0]),
+                                                           get_net_descriptors(network_desc, batch[1]),
                                                            get_net_descriptors(network_desc, batch[2]))
 
     results_dir = 'results/{}/'.format(model_name)
@@ -127,7 +133,7 @@ def save_sift_results(dataset_name):
     train_dataset = Dataset(train_images, train_labels)
     test_dataset = Dataset(test_images, test_labels, mean=train_dataset.mean, std=train_dataset.std)
 
-    batch = test_dataset.get_batch_triplets(1000)
+    batch = test_dataset.get_batch_triplets(100000)
 
     positives_sift, negatives_sift = get_positives_negatives(get_sift_descriptors(batch[0]), get_sift_descriptors(batch[1]), get_sift_descriptors(batch[2]))
 
@@ -156,7 +162,7 @@ def plot_saved_data(directories, dataset_names, labels, type):
 
     for i in range(len(directories)):
         positives, negatives = load_positives_negatives_from_files(directories[i], dataset_names[i])
-        tpr, fpr, precision, recall = get_tpr_fpr_precision_recall(positives, negatives, 500)
+        tpr, fpr, precision, recall = get_tpr_fpr_precision_recall(positives, negatives, 5000)
 
         auc_roc = np.trapz(tpr, fpr)
         auc_pr = np.trapz(precision, recall)
@@ -185,11 +191,15 @@ def plot_saved_data(directories, dataset_names, labels, type):
 
 
 if __name__ == "__main__":
-    # save_net_results('desc_ali2_hinge_relu_avg_batch_adam', 'alienator2')
+    physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+    # save_net_results('desc_ali_custom_ns2_hinge_relu_avg_batch_adam', 'alienator_custom_ns')
     # save_sift_results('alienator2')
 
     directories = [
-                   'results/desc_liberty_hinge_relu_avg_batch_adam/',
+                   # 'results/desc_liberty_hinge_relu_avg_batch_adam/',
                    # 'results/desc_liberty_hinge_relu_avg_batch_sgd/',
                    # 'results/desc_liberty_hinge_tanh_l2_batch_adam/',
                    # 'results/desc_liberty_softpn_hm_relu_avg_batch_adam/',
@@ -197,15 +207,22 @@ if __name__ == "__main__":
                    # 'results/desc_liberty_softpn_relu_avg_batch_adam/',
                    # 'results/desc_liberty_softpn_relu_avg_batch_sgd/',
                    # 'results/desc_liberty_softpn_tanh_l2_batch_adam/',
-                   'results/sift/',
+                   # 'results/sift/',
                    'results/desc_ali_hinge_relu_avg_batch_adam/',
+                   # 'results/desc_ali256_hinge_relu_avg_batch_adam/',
+                   # 'results/desc_ali_custom2_hinge_relu_avg_batch_adam/',
+                   # 'results/desc_ali_custom3_hinge_relu_avg_batch_adam/',
+                   # 'results/desc_ali_custom4_hinge_relu_avg_batch_adam/',
+                   'results/desc_ali_custom5_hinge_relu_avg_batch_adam/',
+                   'results/desc_ali_custom6_hinge_relu_avg_batch_adam/',
+                   'results/desc_ali_custom_ns_hinge_relu_avg_batch_adam/',
+                   'results/desc_ali_custom_ns2_hinge_relu_avg_batch_adam/',
                    # 'results/desc_ali_softpn_relu_avg_batch_adam/',
                    'results/sift/',
-                   'results/desc_ali2_hinge_relu_avg_batch_adam/',
-                   'results/sift/'
+                   # 'results/desc_ali2_hinge_relu_avg_batch_adam/',
+                   # 'results/sift/'
     ]
     dataset_names = [
-                     'notredame',
                      # 'notredame',
                      # 'notredame',
                      # 'notredame',
@@ -213,15 +230,24 @@ if __name__ == "__main__":
                      # 'notredame',
                      # 'notredame',
                      # 'notredame',
-                     'notredame',
+                     # 'notredame',
+                     # 'notredame',
                      'alienator',
                      # 'alienator',
+                     # 'alienator_custom',
+                     # 'alienator_custom',
+                     # 'alienator_custom',
+                     'alienator_custom',
+                     'alienator_custom',
+                     'alienator_custom_ns',
+                     'alienator_custom_ns',
+                     # 'alienator',
                      'alienator',
-                     'alienator2',
-                     'alienator2'
+                     # 'alienator2',
+                     # 'alienator2'
     ]
     labels = [
-        'Network - Notre Dame',
+        # 'Network - Notre Dame',
         # 'Hinge new SGD',
         # 'Hinge - old',
         # 'SoftPN - new',
@@ -229,12 +255,20 @@ if __name__ == "__main__":
         # 'SoftPN new Adam',
         # 'SoftPN new SGD',
         # 'SoftPN old Adam',
-        'SIFT - Notre Dame',
+        # 'SIFT - Notre Dame',
         'Network - Alienator',
+        # 'Network 256 - Alienator',
+        # 'Network - Alienator custom',
+        # 'Network - Alienator custom3',
+        # 'Network - Alienator custom4',
+        'Network - Alienator custom5',
+        'Network - Alienator custom6',
+        'Network - Alienator custom NS',
+        'Network - Alienator custom NS2',
         # 'Alienator SoftPN',
         'SIFT - Alienator',
-        'Network - Alienator reduced',
-        'SIFT - Alienator reduced'
+        # 'Network - Alienator reduced',
+        # 'SIFT - Alienator reduced'
     ]
 
     plot_saved_data(directories, dataset_names, labels, 'ROC')

@@ -1,4 +1,4 @@
-from tensorflow.python import keras as K
+from tensorflow import keras as K
 import numpy as np
 import os
 import cv2
@@ -49,9 +49,10 @@ class NetworkDesc:
             return K.backend.sqrt(pooled)
 
         model = K.Sequential()
-        # model.add(K.layers.BatchNormalization(input_shape=(64, 64, 1)))
+        model.add(K.layers.BatchNormalization(input_shape=(64, 64, 1)))
 
-        model.add(K.layers.Conv2D(filters=32, kernel_size=7, kernel_initializer=K.initializers.TruncatedNormal(stddev=2.0 / 49), input_shape=(64, 64, 1)))
+        # model.add(K.layers.Conv2D(filters=32, kernel_size=7, kernel_initializer=K.initializers.TruncatedNormal(stddev=2.0 / 49), input_shape=(64, 64, 1)))
+        model.add(K.layers.Conv2D(filters=32, kernel_size=7, kernel_initializer=K.initializers.TruncatedNormal(stddev=2.0 / 49)))
         model.add(K.layers.BatchNormalization())
         model.add(K.layers.Activation('relu'))
         model.add(K.layers.AveragePooling2D(pool_size=2, strides=2))
@@ -74,6 +75,7 @@ class NetworkDesc:
         # model.add(K.layers.MaxPooling2D(pool_size=4, strides=4))
         # model.add(K.layers.Lambda(l2_pooling, arguments={'size': 4, 'stride': 4}))
         model.add(K.layers.Reshape((128, )))
+        # model.add(K.layers.Dense(16))
 
         model.summary()
         return model
@@ -131,10 +133,10 @@ class NetworkDesc:
         return self.training_model.test_on_batch([input1, input2, input3], np.zeros(input1.shape[0]))
 
     def get_losses(self, input1, input2, input3):
-        return self.training_model.predict_on_batch([input1, input2, input3])
+        return self.training_model.predict_on_batch([input1, input2, input3]).numpy()
 
     def get_descriptor(self, input_patch):
-        return self.desc_model.predict_on_batch(input_patch)
+        return self.desc_model.predict_on_batch(input_patch).numpy()
 
     def hardmine_train(self, input1, input2, input3, mining_ratio):
         if mining_ratio == 1:

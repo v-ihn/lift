@@ -2,9 +2,9 @@ try:
     import cv2.__init__ as cv2
 except ImportError:
     pass
-from tensorflow.python import keras as K
 import numpy as np
 import os
+from tensorflow import keras as K
 
 
 def mnist():
@@ -54,8 +54,7 @@ def alienator(data_folder, train_filename, test_filename, rotated=True, kp_size_
             img = cv2.warpAffine(img, m, (img.shape[1], img.shape[0]))
 
         img = img[y_center - crop_size:y_center + crop_size, x_center - crop_size:x_center + crop_size]
-        # img = cv2.resize(img, (size, size))
-        # img = cv2.normalize(img.astype('float'), None, -1.0, 1.0, cv2.NORM_MINMAX)
+
         return img
 
     train_images, test_images, train_labels, test_labels = [], [], [], []
